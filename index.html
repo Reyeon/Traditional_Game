@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>조선오락실 - K-전통 놀이 웹 시뮬레이터</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel CDN (for JSX compilation in browser) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // 게임 데이터 정의
+    const GAMES_DATA = [
+      {
+        id: 'seunggyeongdo',
+        category: '보드 및 전략 시뮬레이션',
+        title: '승경도',
+        desc: '양반들이 즐기던 놀이로, 윤목을 던져 조선시대 관직을 오르는 교육적 보드게임.',
+        playable: true,
+        color: 'bg-amber-700'
+      },
+      {
+        id: 'yutnori',
+        category: '보드 및 전략 시뮬레이션',
+        title: '윷놀이',
+        desc: '네 개의 윷을 던져 도·개·걸·윷·모에 따라 말을 이동시키는 대표 명절 놀이.',
+        playable: true,
+        color: 'bg-orange-600'
+      },
+      {
+        id: 'gonu',
+        category: '보드 및 전략 시뮬레이션',
+        title: '고누',
+        desc: '땅바닥에 선을 그어 조약돌로 상대방의 말을 막거나 따내는 두뇌 퍼즐.',
+        playable: true,
+        color: 'bg-stone-600'
+      },
+      {
+        id: 'tuho',
+        category: '기술 및 액션 미니게임',
+        title: '투호',
+        desc: '일정 거리에서 화살을 병 안에 던져 넣는 놀이. 궤적과 힘 조절이 핵심!',
+        playable: true,
+        color: 'bg-emerald-700'
+      },
+      {
+        id: 'kite',
+        category: '기술 및 액션 미니게임',
+        title: '연날리기',
+        desc: '얼레를 조종해 연을 띄우고, 줄을 비벼 상대방의 줄을 끊는 짜릿한 액션.',
+        playable: true,
+        color: 'bg-sky-600'
+      },
+      {
+        id: 'gyeokgu',
+        category: '기술 및 액션 미니게임',
+        title: '격구',
+        desc: '막대기로 공을 쳐서 구멍에 넣는 경기. 팀 협동과 다이내믹한 움직임.',
+        playable: true,
+        color: 'bg-red-800'
+      },
+      {
+        id: 'taekkyon',
+        category: '대전 및 스포츠 게임',
+        title: '택견',
+        desc: '품밟기 리듬을 타며 상대방을 넘어뜨리는 전통 무술 대전.',
+        playable: true,
+        color: 'bg-indigo-700'
+      },
+      {
+        id: 'ssireum',
+        category: '대전 및 스포츠 게임',
+        title: '씨름',
+        desc: '샅바를 잡고 손과 발기술을 커맨드로 입력해 상대를 쓰러뜨리는 힘겨루기.',
+        playable: true,
+        color: 'bg-yellow-700'
+      },
+      {
+        id: 'ganggang',
+        category: '기타 웹 게임 요소',
+        title: '강강술래',
+        desc: '손을 맞잡고 원을 그리며 도는 소셜 리듬 퀘스트.',
+        playable: true,
+        color: 'bg-pink-600'
+      },
+      {
+        id: 'biseok',
+        category: '기타 웹 게임 요소',
+        title: '비석치기',
+        desc: '몸의 일부로 비석을 운반해 상대를 쓰러뜨리는 캐주얼 물리 액션.',
+        playable: true,
+        color: 'bg-slate-700'
+      }
+    ];
+
+    const TuhoGame = ({ onExit }) => {
+      const [arrows, setArrows] = useState(12);
+      const [score, setScore] = useState(0);
+      const [power, setPower] = useState(0);
+      const [isAiming, setIsAiming] = useState(false);
+      const [direction, setDirection] = useState(1);
+      const [message, setMessage] = useState('버튼을 눌러 게이지를 조절하세요!');
+      const [gameOver, setGameOver] = useState(false);
+      
+      const reqRef = useRef();
+
+      // 힘 조절 게이지 애니메이션 루프
+      useEffect(() => {
+        if (isAiming) {
+          const animate = () => {
+            setPower((prev) => {
+              let next = prev + direction * 2;
+              if (next >= 100) {
+                setDirection(-1);
+                return 100;
+              }
+              if (next <= 0) {
+                setDirection(1);
+                return 0;
+              }
+              return next;
+            });
+            reqRef.current = requestAnimationFrame(animate);
+          };
+          reqRef.current = requestAnimationFrame(animate);
+        }
+        return () => cancelAnimationFrame(reqRef.current);
+      }, [isAiming, direction]);
+
+      const handleThrow = () => {
+        if (arrows <= 0) return;
+        
+        if (!isAiming) {
+          setIsAiming(true);
+          setMessage('정중앙(초록색)에 왔을 때 던지세요!');
+        } else {
+          setIsAiming(false);
+          setArrows((prev) => prev - 1);
+          
+          // 판정 (45 ~ 55 사이면 명중)
+          if (power >= 42 && power <= 58) {
+            setScore((prev) => prev + 1);
+            setMessage('명중입니다! (나이스 투구)');
+          } else {
+            setMessage('아쉽게 빗나갔습니다!');
+          }
+
+          if (arrows - 1 === 0) {
+            setGameOver(true);
+            setMessage(`게임 종료! 최종 점수: ${score + (power >= 42 && power <= 58 ? 1 : 0)} / 12`);
+          }
+        }
+      };
+
+      const restart = () => {
+        setArrows(12);
+        setScore(0);
+        setPower(0);
+        setIsAiming(false);
+        setGameOver(false);
+        setMessage('버튼을 눌러 게이지를 조절하세요!');
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-stone-100 rounded-2xl p-8 shadow-inner border-2 border-stone-300">
+          <h2 className="text-3xl font-bold text-emerald-800 mb-2">투호놀이</h2>
+          <p className="text-stone-600 mb-6">항아리에 화살을 던져 넣으세요! (남은 화살: {arrows})</p>
+
+          <div className="flex items-end justify-center w-64 h-64 border-b-4 border-stone-800 relative mb-8">
+            {/* 투호통 (항아리) */}
+            <div className="w-24 h-40 bg-stone-700 rounded-b-xl relative flex justify-center shadow-lg">
+              <div className="w-28 h-6 bg-stone-800 absolute -top-3 rounded-full border-2 border-stone-900"></div>
+              {/* 꽂힌 화살들 시각화 */}
+              {Array.from({ length: score }).map((_, i) => (
+                <div key={i} className="w-1.5 h-20 bg-amber-200 absolute border border-amber-800" 
+                    style={{ 
+                      top: '-15px', 
+                      left: `${15 + (i * 5) % 60}%`, 
+                      transform: `rotate(${Math.random() * 20 - 10}deg)` 
+                    }}>
+                  <div className="w-2 h-3 bg-red-500 absolute -top-3 -left-[1px]"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full max-w-md bg-stone-300 h-8 rounded-full overflow-hidden relative mb-4">
+            {/* 명중 존 (Sweet spot) */}
+            <div className="absolute left-[42%] w-[16%] h-full bg-green-400 opacity-50"></div>
+            {/* 파워 게이지 바 */}
+            <div 
+              className={`h-full ${isAiming ? 'bg-red-500' : 'bg-stone-500'} transition-all ease-linear`}
+              style={{ width: `${power}%` }}
+            ></div>
+          </div>
+
+          <p className="text-xl font-bold text-stone-800 mb-6 h-8">{message}</p>
+
+          <div className="flex gap-4">
+            {!gameOver ? (
+              <button 
+                onClick={handleThrow}
+                className={`px-8 py-3 rounded-xl font-bold text-white shadow-lg transform transition active:scale-95 ${
+                  isAiming ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {isAiming ? '던지기!!' : '조준 시작'}
+              </button>
+            ) : (
+              <button 
+                onClick={restart}
+                className="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg"
+              >
+                다시 하기
+              </button>
+            )}
+            <button onClick={onExit} className="px-6 py-3 rounded-xl font-bold text-stone-700 bg-stone-200 hover:bg-stone-300">
+              돌아가기
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const YutnoriGame = ({ onExit }) => {
+      // 0: 평평한 면(배), 1: 둥근 면(등)
+      const [sticks, setSticks] = useState([1, 1, 1, 1]); 
+      const [isRolling, setIsRolling] = useState(false);
+      const [result, setResult] = useState('');
+      const [history, setHistory] = useState([]);
+
+      const throwYut = () => {
+        if (isRolling) return;
+        setIsRolling(true);
+        setResult('');
+        
+        setTimeout(() => {
+          // 윷 던지기 확률 (완벽한 50:50보다는 배가 나올 확률이 약간 높음)
+          const newSticks = Array.from({ length: 4 }, () => Math.random() > 0.4 ? 0 : 1);
+          setSticks(newSticks);
+          
+          const flatCount = newSticks.filter(s => s === 0).length;
+          let resText = '';
+          switch(flatCount) {
+            case 0: resText = '모! (5칸 이동)'; break;
+            case 1: resText = '도 (1칸 이동)'; break;
+            case 2: resText = '개 (2칸 이동)'; break;
+            case 3: resText = '걸 (3칸 이동)'; break;
+            case 4: resText = '윷! (4칸 이동)'; break;
+            default: break;
+          }
+          
+          setResult(resText);
+          setHistory(prev => [resText, ...prev].slice(0, 5));
+          setIsRolling(false);
+        }, 600);
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-orange-50 rounded-2xl p-8 shadow-inner border-2 border-orange-200">
+          <h2 className="text-3xl font-bold text-orange-900 mb-2">윷놀이 던지기</h2>
+          <p className="text-orange-700 mb-8">네 개의 윷을 던져 운을 시험해보세요!</p>
+
+          {/* 윷 시각화 */}
+          <div className={`flex gap-4 mb-12 ${isRolling ? 'animate-bounce' : ''}`}>
+            {sticks.map((state, idx) => (
+              <div key={idx} className="relative w-12 h-40 drop-shadow-xl transition-transform duration-500">
+                {state === 1 ? (
+                  // 둥근 면 (등) - X자 표시
+                  <div className="w-full h-full bg-amber-800 rounded-t-full rounded-b-full flex flex-col items-center justify-center gap-4 border-2 border-amber-950">
+                    <span className="text-amber-950 opacity-40 font-bold text-xl">X</span>
+                    <span className="text-amber-950 opacity-40 font-bold text-xl">X</span>
+                    <span className="text-amber-950 opacity-40 font-bold text-xl">X</span>
+                  </div>
+                ) : (
+                  // 평평한 면 (배)
+                  <div className="w-full h-full bg-amber-100 rounded-sm border-2 border-amber-300 shadow-inner flex justify-center items-center">
+                    <div className="w-1/2 h-[90%] border border-amber-200 rounded-full"></div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="h-12 mb-6">
+            {result && <div className="text-4xl font-black text-red-600 animate-pulse">{result}</div>}
+          </div>
+
+          <div className="flex gap-4 mb-8">
+            <button 
+              onClick={throwYut}
+              disabled={isRolling}
+              className="px-8 py-4 rounded-full font-bold text-xl text-white bg-orange-600 hover:bg-orange-700 shadow-[0_6px_0_rgb(194,65,12)] active:shadow-[0_0px_0_rgb(194,65,12)] active:translate-y-[6px] transition-all"
+            >
+              {isRolling ? '던지는 중...' : '윷 던지기!'}
+            </button>
+            <button onClick={onExit} className="px-6 py-4 rounded-full font-bold text-stone-700 bg-stone-200 hover:bg-stone-300 shadow-[0_6px_0_rgb(214,211,209)] active:shadow-none active:translate-y-[6px] transition-all">
+              메인으로
+            </button>
+          </div>
+
+          {history.length > 0 && (
+            <div className="mt-4 w-full max-w-sm bg-white/50 p-4 rounded-xl border border-orange-200">
+              <h3 className="font-bold text-stone-700 mb-2 border-b border-orange-200 pb-1">최근 기록</h3>
+              <div className="flex gap-2 flex-wrap">
+                {history.map((h, i) => (
+                  <span key={i} className="px-3 py-1 bg-white rounded-md text-sm shadow-sm font-medium text-stone-600">{h}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const SeunggyeongdoGame = ({ onExit }) => {
+      const RANKS = ['평민 (시작)', '종9품 참봉', '정7품 참군', '정5품 교리', '정3품 당상관', '정2품 판서', '정1품 우의정', '정1품 좌의정', '영의정 (승리!)'];
+      const [position, setPosition] = useState(0);
+      const [isRolling, setIsRolling] = useState(false);
+      const [rollValue, setRollValue] = useState(0);
+
+      const rollYunmok = () => {
+        setIsRolling(true);
+        setTimeout(() => {
+          const move = Math.floor(Math.random() * 5) + 1; // 1~5 이동
+          setRollValue(move);
+          setPosition(prev => Math.min(prev + move, RANKS.length - 1));
+          setIsRolling(false);
+        }, 500);
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-amber-50 rounded-2xl p-8 shadow-inner border-2 border-amber-200">
+          <h2 className="text-3xl font-bold text-amber-900 mb-2">승경도</h2>
+          <p className="text-amber-700 mb-8">윤목을 던져 가장 먼저 영의정에 오르세요!</p>
+
+          <div className="w-full max-w-2xl bg-amber-100 p-6 rounded-xl border-2 border-amber-800 mb-8 grid grid-cols-3 gap-2">
+            {RANKS.map((rank, idx) => (
+              <div key={idx} className={`p-4 rounded-lg flex items-center justify-center text-center font-bold border-2 transition-all ${
+                position === idx ? 'bg-amber-600 text-white border-amber-800 scale-105 shadow-lg' : 'bg-amber-50 text-amber-900 border-amber-300'
+              }`}>
+                {rank}
+                {position === idx && <span className="absolute -top-3 -right-3 text-2xl">🐎</span>}
+              </div>
+            ))}
+          </div>
+
+          <div className="h-12 mb-4 text-xl font-bold text-amber-900">
+            {rollValue > 0 && !isRolling && `${rollValue}칸 이동!`}
+            {isRolling && '윤목 굴리는 중...'}
+          </div>
+
+          <div className="flex gap-4">
+            {position < RANKS.length - 1 ? (
+              <button onClick={rollYunmok} disabled={isRolling} className="px-8 py-3 rounded-xl font-bold text-white bg-amber-700 hover:bg-amber-800 shadow-lg disabled:opacity-50">
+                윤목 던지기
+              </button>
+            ) : (
+              <button onClick={() => { setPosition(0); setRollValue(0); }} className="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg">
+                새 관직 오르기 (재시작)
+              </button>
+            )}
+            <button onClick={onExit} className="px-6 py-3 rounded-xl font-bold text-stone-700 bg-stone-200 hover:bg-stone-300">나가기</button>
+          </div>
+        </div>
+      );
+    };
+
+    const GonuGame = ({ onExit }) => {
+      const [board, setBoard] = useState(Array(9).fill(null));
+      const [isPlayerTurn, setIsPlayerTurn] = useState(true);
+      const [winner, setWinner] = useState(null);
+
+      const checkWinner = (squares) => {
+        const lines = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+        for (let i = 0; i < lines.length; i++) {
+          const [a, b, c] = lines[i];
+          if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) return squares[a];
+        }
+        return squares.every(s => s !== null) ? 'draw' : null;
+      };
+
+      const handleClick = (i) => {
+        if (board[i] || winner || !isPlayerTurn) return;
+        const newBoard = [...board];
+        newBoard[i] = '⚫'; // 흑돌 (플레이어)
+        setBoard(newBoard);
+        setIsPlayerTurn(false);
+        
+        const currentWinner = checkWinner(newBoard);
+        if (currentWinner) { setWinner(currentWinner); return; }
+
+        // 상대방(AI) 턴
+        setTimeout(() => {
+          const emptyIndices = newBoard.map((v, idx) => v === null ? idx : null).filter(v => v !== null);
+          if (emptyIndices.length > 0) {
+            const randomIdx = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+            newBoard[randomIdx] = '⚪'; // 백돌 (AI)
+            setBoard([...newBoard]);
+            setWinner(checkWinner(newBoard));
+            setIsPlayerTurn(true);
+          }
+        }, 600);
+      };
+
+      const restart = () => { setBoard(Array(9).fill(null)); setWinner(null); setIsPlayerTurn(true); };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-stone-100 rounded-2xl p-8 shadow-inner border-2 border-stone-300">
+          <h2 className="text-3xl font-bold text-stone-800 mb-2">우물고누 (3x3)</h2>
+          <p className="text-stone-600 mb-6">돌을 놓아 가로, 세로, 대각선 3줄을 먼저 맞추세요!</p>
+          
+          <div className="grid grid-cols-3 gap-2 bg-amber-800 p-3 rounded-xl mb-6 shadow-xl relative">
+            {/* 나무 판자 느낌 배경 선 */}
+            <div className="absolute inset-0 flex flex-col justify-evenly pointer-events-none px-6"><div className="w-full h-1 bg-amber-950/30"></div><div className="w-full h-1 bg-amber-950/30"></div></div>
+            <div className="absolute inset-0 flex justify-evenly pointer-events-none py-6"><div className="h-full w-1 bg-amber-950/30"></div><div className="h-full w-1 bg-amber-950/30"></div></div>
+            
+            {board.map((cell, i) => (
+              <button key={i} onClick={() => handleClick(i)} className="w-20 h-20 bg-amber-100/10 hover:bg-amber-100/20 rounded-lg text-5xl flex items-center justify-center z-10 transition-colors">
+                {cell}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-8 mb-4 text-xl font-bold text-stone-800">
+            {winner === '⚫' && '🎉 승리했습니다!'}
+            {winner === '⚪' && '패배했습니다...'}
+            {winner === 'draw' && '무승부입니다!'}
+            {!winner && (isPlayerTurn ? '당신의 차례입니다 (⚫)' : '상대방이 생각 중... (⚪)')}
+          </div>
+
+          <div className="flex gap-4">
+            {winner && <button onClick={restart} className="px-8 py-3 rounded-xl font-bold text-white bg-stone-700 hover:bg-stone-800">다시 하기</button>}
+            <button onClick={onExit} className="px-6 py-3 rounded-xl font-bold text-stone-700 bg-stone-200 hover:bg-stone-300">나가기</button>
+          </div>
+        </div>
+      );
+    };
+
+    const KiteGame = ({ onExit }) => {
+      const [myLine, setMyLine] = useState(100);
+      const [enemyLine, setEnemyLine] = useState(100);
+      const [gameOver, setGameOver] = useState(false);
+      const [message, setMessage] = useState('버튼을 연타하여 상대방의 연줄을 끊으세요!');
+
+      useEffect(() => {
+        if (gameOver) return;
+        const interval = setInterval(() => {
+          setMyLine(prev => {
+            const next = prev - (Math.random() * 5);
+            if (next <= 0) { setGameOver(true); setMessage('패배! 내 연줄이 끊어졌습니다.'); return 0; }
+            return next;
+          });
+        }, 500);
+        return () => clearInterval(interval);
+      }, [gameOver]);
+
+      const attack = () => {
+        if (gameOver) return;
+        setEnemyLine(prev => {
+          const next = prev - (Math.random() * 10 + 2);
+          if (next <= 0) { setGameOver(true); setMessage('승리! 상대방의 연줄을 끊었습니다!'); return 0; }
+          return next;
+        });
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-sky-50 rounded-2xl p-8 shadow-inner border-2 border-sky-200">
+          <h2 className="text-3xl font-bold text-sky-900 mb-2">연날리기 연싸움</h2>
+          <p className="text-sky-700 mb-8">{message}</p>
+
+          <div className="flex w-full max-w-md justify-between items-end mb-8 px-4 h-48">
+            {/* 내 연 */}
+            <div className="flex flex-col items-center w-1/3">
+              <div className={`text-6xl mb-2 transition-transform ${gameOver && myLine <= 0 ? 'translate-y-20 opacity-0' : 'animate-bounce'}`}>🪁</div>
+              <div className="w-full bg-stone-200 h-6 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 transition-all" style={{width: `${myLine}%`}}></div>
+              </div>
+              <span className="mt-2 font-bold text-sky-900">내 연줄</span>
+            </div>
+            
+            {/* 적 연 */}
+            <div className="flex flex-col items-center w-1/3">
+              <div className={`text-6xl mb-2 transition-transform ${gameOver && enemyLine <= 0 ? 'translate-y-20 opacity-0' : 'animate-pulse'}`}>🪁</div>
+              <div className="w-full bg-stone-200 h-6 rounded-full overflow-hidden">
+                <div className="h-full bg-red-500 transition-all" style={{width: `${enemyLine}%`}}></div>
+              </div>
+              <span className="mt-2 font-bold text-red-900">상대 연줄</span>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            {!gameOver ? (
+              <button onClick={attack} className="px-10 py-6 rounded-2xl font-black text-2xl text-white bg-sky-600 hover:bg-sky-700 active:scale-95 shadow-xl">
+                줄 비비기!! (연타)
+              </button>
+            ) : (
+              <button onClick={() => { setMyLine(100); setEnemyLine(100); setGameOver(false); setMessage('버튼을 연타하여 상대방의 연줄을 끊으세요!'); }} className="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700">다시 하기</button>
+            )}
+            <button onClick={onExit} className="px-6 py-3 rounded-xl font-bold text-stone-700 bg-stone-200 hover:bg-stone-300">나가기</button>
+          </div>
+        </div>
+      );
+    };
+
+    const GyeokguGame = ({ onExit }) => {
+      const [power, setPower] = useState(50);
+      const [targetHole, setTargetHole] = useState(0); // 0:Left, 1:Center, 2:Right
+      const [aim, setAim] = useState(1);
+      const [message, setMessage] = useState('방향과 힘을 조절하여 구멍에 공을 넣으세요.');
+      
+      useEffect(() => { setTargetHole(Math.floor(Math.random() * 3)); }, []);
+
+      const hitBall = () => {
+        if (aim === targetHole) {
+          if (power >= 45 && power <= 65) {
+            setMessage('나이스 샷! 구멍에 정확히 들어갔습니다!');
+          } else {
+            setMessage('방향은 맞았으나 힘 조절에 실패했습니다.');
+          }
+        } else {
+          setMessage('엉뚱한 방향으로 날아갔습니다!');
+        }
+      };
+
+      const restart = () => { setTargetHole(Math.floor(Math.random() * 3)); setMessage('방향과 힘을 조절하여 구멍에 공을 넣으세요.'); setPower(50); };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-green-50 rounded-2xl p-8 shadow-inner border-2 border-green-200">
+          <h2 className="text-3xl font-bold text-green-900 mb-2">격구 (조선 골프)</h2>
+          <p className="text-green-700 mb-8">{message}</p>
+
+          {/* 필드 */}
+          <div className="w-full max-w-md h-40 bg-green-600 rounded-xl relative border-4 border-green-800 mb-8 overflow-hidden shadow-inner">
+            {/* 타겟 구멍 */}
+            <div className="absolute top-4 w-8 h-8 bg-black rounded-full border-2 border-stone-400" style={{ left: targetHole === 0 ? '15%' : targetHole === 1 ? '50%' : '85%', transform: 'translateX(-50%)' }}></div>
+            {/* 조준선 가이드 */}
+            <div className="absolute bottom-6 left-1/2 w-1 h-32 origin-bottom transition-transform duration-300" style={{ transform: `translateX(-50%) rotate(${aim === 0 ? '-35deg' : aim === 2 ? '35deg' : '0deg'})`, backgroundColor: 'rgba(255,255,255,0.3)' }}></div>
+            {/* 공 */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-6 h-6 bg-white rounded-full shadow-md"></div>
+          </div>
+
+          <div className="w-full max-w-md flex flex-col gap-4 mb-8">
+            <div>
+              <label className="font-bold text-stone-700 mb-2 block">방향 조준</label>
+              <div className="flex gap-2">
+                {['왼쪽', '중앙', '오른쪽'].map((dir, idx) => (
+                  <button key={idx} onClick={() => setAim(idx)} className={`flex-1 py-2 rounded-lg font-bold transition-colors ${aim === idx ? 'bg-stone-800 text-white' : 'bg-stone-300 text-stone-600'}`}>{dir}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="font-bold text-stone-700 mb-2 flex justify-between"><span>힘 조절</span><span>{power}%</span></label>
+              <input type="range" min="0" max="100" value={power} onChange={(e) => setPower(Number(e.target.value))} className="w-full h-4 bg-stone-300 rounded-full appearance-none cursor-pointer accent-red-600" />
+              <div className="w-full flex justify-center mt-1"><div className="w-1/5 h-2 bg-green-500 rounded-full"></div></div> {/* Sweet spot 표시 */}
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <button onClick={hitBall} className="px-8 py-3 rounded-xl font-bold text-white bg-red-700 hover:bg-red-800 shadow-lg">공 치기!</button>
+            <button onClick={restart} className="px-8 py-3 rounded-xl font-bold text-stone-700 bg-white border-2 border-stone-300 hover:bg-stone-100">다음 홀</button>
+            <button onClick={onExit} className="px-6 py-3 rounded-xl font-bold text-stone-700 bg-stone-200 hover:bg-stone-300">나가기</button>
+          </div>
+        </div>
+      );
+    };
+
+    const TaekkyonGame = ({ onExit }) => {
+      const [playerHP, setPlayerHP] = useState(3);
+      const [enemyHP, setEnemyHP] = useState(3);
+      const [message, setMessage] = useState('이크! 에크! 기술을 선택하세요.');
+      const [lastMoves, setLastMoves] = useState({p: null, e: null});
+
+      const MOVES = {
+        kick: { name: '발차기', beats: 'sweep', icon: '🦶' },
+        sweep: { name: '다리걸기', beats: 'push', icon: '🪝' },
+        push: { name: '밀기', beats: 'kick', icon: '✋' }
+      };
+
+      const playTurn = (playerMoveKey) => {
+        if (playerHP <= 0 || enemyHP <= 0) return;
+        
+        const moveKeys = Object.keys(MOVES);
+        const enemyMoveKey = moveKeys[Math.floor(Math.random() * moveKeys.length)];
+        
+        setLastMoves({ p: MOVES[playerMoveKey].icon, e: MOVES[enemyMoveKey].icon });
+
+        if (playerMoveKey === enemyMoveKey) {
+          setMessage('서로의 기술이 부딪혔습니다! (무승부)');
+        } else if (MOVES[playerMoveKey].beats === enemyMoveKey) {
+          setEnemyHP(prev => prev - 1);
+          setMessage(`나의 ${MOVES[playerMoveKey].name} 적중! 적의 ${MOVES[enemyMoveKey].name}를 파훼했습니다.`);
+        } else {
+          setPlayerHP(prev => prev - 1);
+          setMessage(`앗! 적의 ${MOVES[enemyMoveKey].name}에 당했습니다.`);
+        }
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-indigo-50 rounded-2xl p-8 shadow-inner border-2 border-indigo-200">
+          <h2 className="text-3xl font-bold text-indigo-900 mb-2">택견 대련</h2>
+          <p className="text-indigo-700 mb-6 font-bold bg-white px-4 py-2 rounded-full border border-indigo-200">발차기 &gt; 다리걸기 &gt; 밀기 &gt; 발차기</p>
+
+          <div className="flex justify-between w-full max-w-md mb-8">
+            <div className="text-center">
+              <div className="text-xl font-bold text-stone-800 mb-2">나</div>
+              <div className="flex gap-1">{Array.from({length: 3}).map((_, i) => <div key={i} className={`w-8 h-8 rounded-full ${i < playerHP ? 'bg-red-500' : 'bg-stone-300'}`}></div>)}</div>
+              <div className="text-6xl mt-4 bg-white w-24 h-24 rounded-full flex items-center justify-center shadow-inner">{lastMoves.p || '🥷'}</div>
+            </div>
+            <div className="flex items-center text-3xl font-black text-indigo-300">VS</div>
+            <div className="text-center">
+              <div className="text-xl font-bold text-stone-800 mb-2">상대방</div>
+              <div className="flex gap-1">{Array.from({length: 3}).map((_, i) => <div key={i} className={`w-8 h-8 rounded-full ${i < enemyHP ? 'bg-blue-500' : 'bg-stone-300'}`}></div>)}</div>
+              <div className="text-6xl mt-4 bg-white w-24 h-24 rounded-full flex items-center justify-center shadow-inner">{lastMoves.e || '👹'}</div>
+            </div>
+          </div>
+
+          <div className="h-12 mb-6 text-lg font-bold text-indigo-900 text-center">{message}</div>
+
+          <div className="flex gap-3 mb-6">
+            {playerHP > 0 && enemyHP > 0 ? (
+              Object.entries(MOVES).map(([key, move]) => (
+                <button key={key} onClick={() => playTurn(key)} className="px-6 py-4 rounded-xl font-bold text-stone-800 bg-white border-2 border-indigo-300 hover:bg-indigo-100 hover:border-indigo-500 transition-colors shadow-sm flex flex-col items-center">
+                  <span className="text-2xl mb-1">{move.icon}</span>{move.name}
+                </button>
+              ))
+            ) : (
+              <button onClick={() => { setPlayerHP(3); setEnemyHP(3); setMessage('이크! 에크! 기술을 선택하세요.'); setLastMoves({p:null, e:null}); }} className="px-8 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700">다시 대련하기</button>
+            )}
+          </div>
+          <button onClick={onExit} className="px-6 py-2 rounded-xl font-bold text-stone-600 bg-transparent border hover:bg-stone-200">장터로</button>
+        </div>
+      );
+    };
+
+    const SsireumGame = ({ onExit }) => {
+      const [balance, setBalance] = useState(50);
+      const [gameOver, setGameOver] = useState(false);
+      const [message, setMessage] = useState('샅바를 잡았습니다! 버튼을 연타하여 상대를 넘기세요!');
+
+      useEffect(() => {
+        if (gameOver) return;
+        const interval = setInterval(() => {
+          setBalance(prev => {
+            const next = prev + 3; // AI가 계속 밀어붙임
+            if (next >= 100) { setGameOver(true); setMessage('패배... 모래판에 넘어졌습니다.'); return 100; }
+            return next;
+          });
+        }, 200);
+        return () => clearInterval(interval);
+      }, [gameOver]);
+
+      const pull = () => {
+        if (gameOver) return;
+        setBalance(prev => {
+          const next = prev - 8;
+          if (next <= 0) { setGameOver(true); setMessage('승리!! 화려한 뒤집기로 상대를 눕혔습니다!'); return 0; }
+          return next;
+        });
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-yellow-50 rounded-2xl p-8 shadow-inner border-2 border-yellow-200">
+          <h2 className="text-3xl font-bold text-yellow-900 mb-2">씨름 한판</h2>
+          <p className="text-yellow-800 mb-8 font-medium">{message}</p>
+
+          {/* 모래판 힘의 균형 바 */}
+          <div className="w-full max-w-lg mb-12 relative">
+            <div className="flex justify-between mb-2 font-bold text-stone-600"><span>나의 영역</span><span>상대의 영역</span></div>
+            <div className="h-12 bg-stone-300 rounded-full overflow-hidden border-4 border-yellow-800 relative flex items-center">
+              <div className="h-full bg-red-500 transition-all duration-100" style={{width: `${balance}%`}}></div>
+              <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-black/50 z-10"></div> {/* 중앙선 */}
+              {/* 힘줄다리기 마커 */}
+              <div className="absolute w-10 h-14 bg-white border-2 border-black rounded-lg shadow-lg z-20 flex items-center justify-center text-xl transition-all duration-100" style={{left: `calc(${balance}% - 20px)`}}>🤼</div>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            {!gameOver ? (
+              <button onClick={pull} className="px-12 py-6 rounded-2xl font-black text-2xl text-white bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 active:scale-95 shadow-xl select-none">
+                당기기!! (연타)
+              </button>
+            ) : (
+              <button onClick={() => { setBalance(50); setGameOver(false); setMessage('샅바를 잡았습니다! 버튼을 연타하여 상대를 넘기세요!'); }} className="px-8 py-3 rounded-xl font-bold text-white bg-stone-800 hover:bg-stone-900">새 판 짜기</button>
+            )}
+            <button onClick={onExit} className="px-6 py-3 rounded-xl font-bold text-stone-700 bg-stone-200 hover:bg-stone-300">나가기</button>
+          </div>
+        </div>
+      );
+    };
+
+    const GanggangGame = ({ onExit }) => {
+      const [activeNode, setActiveNode] = useState(-1);
+      const [score, setScore] = useState(0);
+      const [timeLeft, setTimeLeft] = useState(15);
+      const [isPlaying, setIsPlaying] = useState(false);
+
+      useEffect(() => {
+        let timer, nodeTimer;
+        if (isPlaying && timeLeft > 0) {
+          timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+          nodeTimer = setInterval(() => setActiveNode(Math.floor(Math.random() * 6)), 600); // 6개의 노드
+        } else if (timeLeft <= 0) {
+          setIsPlaying(false);
+          setActiveNode(-1);
+        }
+        return () => { clearInterval(timer); clearInterval(nodeTimer); };
+      }, [isPlaying, timeLeft]);
+
+      const hitNode = (index) => {
+        if (index === activeNode) {
+          setScore(prev => prev + 1);
+          setActiveNode(-1); // 중복 클릭 방지
+        }
+      };
+
+      const start = () => { setScore(0); setTimeLeft(15); setIsPlaying(true); };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-pink-50 rounded-2xl p-8 shadow-inner border-2 border-pink-200">
+          <h2 className="text-3xl font-bold text-pink-900 mb-2">강강술래 리듬액션</h2>
+          <p className="text-pink-700 mb-6">불이 들어오는 사람(버튼)을 빠르게 클릭하여 원무를 완성하세요!</p>
+
+          <div className="flex justify-between w-full max-w-xs mb-4 font-bold text-xl text-stone-700 bg-white px-6 py-2 rounded-full shadow-sm">
+            <span>점수: {score}</span>
+            <span className={timeLeft <= 5 ? 'text-red-500 animate-pulse' : ''}>남은 시간: {timeLeft}초</span>
+          </div>
+
+          <div className="relative w-64 h-64 mb-8">
+            <div className="absolute inset-4 border-4 border-pink-200 rounded-full border-dashed animate-[spin_10s_linear_infinite]"></div>
+            {Array.from({length: 6}).map((_, i) => {
+              const angle = (i * 60) * (Math.PI / 180);
+              const x = 50 + 40 * Math.cos(angle);
+              const y = 50 + 40 * Math.sin(angle);
+              return (
+                <button key={i} onMouseDown={() => hitNode(i)}
+                  className={`absolute w-16 h-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 shadow-lg transition-all flex items-center justify-center text-2xl ${
+                    activeNode === i ? 'bg-pink-500 border-pink-300 scale-110 z-10' : 'bg-stone-100 border-stone-300 grayscale opacity-80'
+                  }`}
+                  style={{ left: `${x}%`, top: `${y}%` }}
+                  disabled={!isPlaying}
+                >
+                  {activeNode === i ? '💃' : '🧍'}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-4">
+            {!isPlaying && <button onClick={start} className="px-8 py-3 rounded-xl font-bold text-white bg-pink-600 hover:bg-pink-700 shadow-lg">{timeLeft === 0 ? '다시 놀기' : '놀이 시작'}</button>}
+            <button onClick={onExit} className="px-6 py-3 rounded-xl font-bold text-stone-700 bg-stone-200 hover:bg-stone-300">나가기</button>
+          </div>
+        </div>
+      );
+    };
+
+    const BiseokGame = ({ onExit }) => {
+      const [targetPos, setTargetPos] = useState(0);
+      const [direction, setDirection] = useState(1);
+      const [isThrown, setIsThrown] = useState(false);
+      const [result, setResult] = useState('');
+
+      const reqRef = useRef();
+
+      useEffect(() => {
+        if (!isThrown) {
+          const animate = () => {
+            setTargetPos(prev => {
+              let next = prev + direction * 1.5;
+              if (next >= 100) { setDirection(-1); return 100; }
+              if (next <= 0) { setDirection(1); return 0; }
+              return next;
+            });
+            reqRef.current = requestAnimationFrame(animate);
+          };
+          reqRef.current = requestAnimationFrame(animate);
+        }
+        return () => cancelAnimationFrame(reqRef.current);
+      }, [isThrown, direction]);
+
+      const throwBiseok = () => {
+        if (isThrown) return;
+        setIsThrown(true);
+        // 초록색 영역 (40% ~ 60%)
+        if (targetPos >= 40 && targetPos <= 60) {
+          setResult('명중! 비석이 쓰러졌습니다!');
+        } else {
+          setResult('빗나갔습니다...');
+        }
+      };
+
+      const restart = () => { setIsThrown(false); setResult(''); };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] bg-slate-100 rounded-2xl p-8 shadow-inner border-2 border-slate-300">
+          <h2 className="text-3xl font-bold text-slate-800 mb-2">비석치기</h2>
+          <p className="text-slate-600 mb-8">과녁이 초록색 중앙에 왔을 때 비석을 던지세요!</p>
+
+          {/* 게임 화면 */}
+          <div className="w-full max-w-md h-48 bg-stone-200 rounded-xl mb-6 relative overflow-hidden border-2 border-stone-400">
+            <div className="absolute bottom-0 w-full h-8 bg-stone-400"></div> {/* 바닥 */}
+            
+            {/* 명중 영역 가이드 */}
+            <div className="absolute top-0 bottom-8 left-[40%] w-[20%] bg-green-400/20 border-l border-r border-green-500/50"></div>
+
+            {/* 움직이는 타겟 비석 */}
+            <div className="absolute bottom-8 w-8 h-12 bg-slate-700 border-2 border-slate-900 rounded-sm transition-none" style={{ left: `calc(${targetPos}% - 16px)` }}></div>
+            
+            {/* 던진 내 비석 */}
+            {isThrown && (
+              <div className="absolute top-4 w-10 h-6 bg-slate-400 border border-slate-600 rounded-sm animate-[bounce_0.5s_ease-out_forwards]" style={{ left: `calc(${targetPos}% - 20px)` }}></div>
+            )}
+          </div>
+
+          <div className="h-8 mb-6 font-bold text-xl text-slate-800">{result}</div>
+
+          <div className="flex gap-4">
+            {!isThrown ? (
+              <button onClick={throwBiseok} className="px-10 py-4 rounded-xl font-black text-white bg-slate-700 hover:bg-slate-800 shadow-xl active:scale-95">비석 던지기!</button>
+            ) : (
+              <button onClick={restart} className="px-8 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700">다시 던지기</button>
+            )}
+            <button onClick={onExit} className="px-6 py-3 rounded-xl font-bold text-stone-700 bg-stone-300 hover:bg-stone-400">나가기</button>
+          </div>
+        </div>
+      );
+    };
+
+    const ComingSoonGame = ({ game, onExit }) => (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] bg-stone-100 rounded-2xl p-8 border-2 border-stone-300 text-center">
+        <div className={`w-24 h-24 rounded-full ${game.color} flex items-center justify-center text-white text-4xl font-bold mb-6 shadow-lg`}>
+          {game.title[0]}
+        </div>
+        <h2 className="text-3xl font-bold text-stone-800 mb-4">{game.title}</h2>
+        <p className="text-lg text-stone-600 max-w-md mb-8 leading-relaxed">
+          {game.desc}
+        </p>
+        <div className="bg-amber-100 text-amber-800 px-6 py-4 rounded-lg mb-8 font-medium border border-amber-300 border-dashed">
+          🚧 이 놀이는 현재 장인들이 열심히 말판과 도구를 깎으며 개발 중입니다. 🚧
+        </div>
+        <button onClick={onExit} className="px-8 py-3 rounded-xl font-bold text-white bg-stone-800 hover:bg-stone-900 shadow-lg">
+          장터(메인)로 돌아가기
+        </button>
+      </div>
+    );
+
+    function JoseonArcade() {
+      const [activeGame, setActiveGame] = useState(null);
+
+      // 카테고리별 게임 그룹화
+      const categories = GAMES_DATA.reduce((acc, game) => {
+        if (!acc[game.category]) acc[game.category] = [];
+        acc[game.category].push(game);
+        return acc;
+      }, {});
+
+      const renderGameArea = () => {
+        if (!activeGame) return null;
+        
+        switch (activeGame.id) {
+          case 'tuho': return <TuhoGame onExit={() => setActiveGame(null)} />;
+          case 'yutnori': return <YutnoriGame onExit={() => setActiveGame(null)} />;
+          case 'seunggyeongdo': return <SeunggyeongdoGame onExit={() => setActiveGame(null)} />;
+          case 'gonu': return <GonuGame onExit={() => setActiveGame(null)} />;
+          case 'kite': return <KiteGame onExit={() => setActiveGame(null)} />;
+          case 'gyeokgu': return <GyeokguGame onExit={() => setActiveGame(null)} />;
+          case 'taekkyon': return <TaekkyonGame onExit={() => setActiveGame(null)} />;
+          case 'ssireum': return <SsireumGame onExit={() => setActiveGame(null)} />;
+          case 'ganggang': return <GanggangGame onExit={() => setActiveGame(null)} />;
+          case 'biseok': return <BiseokGame onExit={() => setActiveGame(null)} />;
+          default: return <ComingSoonGame game={activeGame} onExit={() => setActiveGame(null)} />;
+        }
+      };
+
+      return (
+        <div className="min-h-screen bg-[#fdfbf7] font-sans text-stone-900 selection:bg-amber-200">
+          {/* 헤더 (단청 색상 모티브) */}
+          <header className="bg-stone-900 text-[#fdfbf7] border-b-8 border-red-700 shadow-md">
+            <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div>
+                <h1 className="text-4xl font-black tracking-tight flex items-center gap-3">
+                  <span className="text-red-500">조선</span>오락실
+                </h1>
+                <p className="text-stone-400 mt-1 text-sm font-medium">K-전통 놀이 웹 시뮬레이터</p>
+              </div>
+              <div className="flex gap-2">
+                <div className="w-4 h-4 rounded-full bg-red-600"></div>
+                <div className="w-4 h-4 rounded-full bg-blue-600"></div>
+                <div className="w-4 h-4 rounded-full bg-green-600"></div>
+                <div className="w-4 h-4 rounded-full bg-yellow-500"></div>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-6xl mx-auto px-6 py-12">
+            {activeGame ? (
+              /* 게임 플레이 영역 */
+              <div className="animate-in fade-in zoom-in-95 duration-300">
+                {renderGameArea()}
+              </div>
+            ) : (
+              /* 메인 대시보드 영역 */
+              <div className="space-y-16 animate-in fade-in duration-500">
+                {Object.entries(categories).map(([categoryName, games]) => (
+                  <section key={categoryName}>
+                    <h2 className="text-2xl font-bold text-stone-800 mb-6 flex items-center gap-3">
+                      <span className="w-8 h-1 bg-red-700 rounded-full inline-block"></span>
+                      {categoryName}
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {games.map((game) => (
+                        <div 
+                          key={game.id} 
+                          className="group relative bg-white rounded-2xl p-6 border border-stone-200 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden transform hover:-translate-y-1"
+                          onClick={() => setActiveGame(game)}
+                        >
+                          {/* 카드 상단 장식 */}
+                          <div className={`absolute top-0 left-0 w-full h-2 ${game.color}`}></div>
+                          
+                          <div className="flex justify-between items-start mb-4 mt-2">
+                            <h3 className="text-xl font-bold text-stone-900">{game.title}</h3>
+                            {game.playable ? (
+                              <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full animate-pulse">
+                                플레이 가능
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 bg-stone-100 text-stone-500 text-xs font-bold rounded-full">
+                                준비 중
+                              </span>
+                            )}
+                          </div>
+                          
+                          <p className="text-stone-600 text-sm leading-relaxed mb-6 h-10">
+                            {game.desc}
+                          </p>
+                          
+                          <div className="flex justify-end mt-4">
+                            <button className={`px-5 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                              game.playable 
+                                ? 'bg-stone-900 text-white group-hover:bg-red-700' 
+                                : 'bg-stone-100 text-stone-400 group-hover:bg-stone-200'
+                            }`}>
+                              {game.playable ? '입장하기 →' : '살펴보기'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* 푸터 */}
+          <footer className="bg-stone-200 text-stone-500 py-8 text-center border-t border-stone-300 mt-12">
+            <p className="font-medium">© 2026 조선오락실 - 전통과 현대 웹 기술의 만남</p>
+          </footer>
+        </div>
+      );
+    }
+
+    // React 애플리케이션 마운트
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<JoseonArcade />);
+  </script>
+</body>
+</html>
